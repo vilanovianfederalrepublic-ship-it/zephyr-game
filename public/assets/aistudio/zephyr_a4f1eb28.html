@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Zephyr: Isles of Velocity</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #5baae6; font-family: system-ui, -apple-system, sans-serif; touch-action: none; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        /* HUD */
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: clamp(10px, 2.5vw, 20px); z-index: 10;
+            display: flex; justify-content: space-between; align-items: center;
+            pointer-events: none; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .title { font-size: clamp(16px, 3.5vw, 24px); font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+        
+        .hud-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .stats-badge {
+            font-size: clamp(11px, 2.5vw, 14px); font-weight: 700;
+            background: rgba(10, 25, 45, 0.7); border: 1px solid rgba(255,255,255,0.25);
+            padding: 8px 16px; border-radius: 20px; backdrop-filter: blur(8px);
+        }
+        .stats-badge span { color: #00ffd5; }
+
+        /* HUD Buttons */
+        .hud-btn {
+            pointer-events: auto;
+            background: rgba(10, 25, 45, 0.8); border: 1px solid #00ffd5;
+            color: #00ffd5; font-size: clamp(11px, 2.4vw, 13px); font-weight: 800;
+            padding: 8px 14px; border-radius: 20px; cursor: pointer;
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            letter-spacing: 1px; transition: all 0.2s ease; outline: none;
+            box-shadow: 0 0 10px rgba(0,255,213,0.25);
+        }
+        .hud-btn:hover { background: #00ffd5; color: #04101e; }
+        .hud-btn:active { transform: scale(0.95); }
+
+        #reticle {
+            position: absolute; top: 50%; left: 50%; width: 6px; height: 6px;
+            background: #fff; border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 8px rgba(255,255,255,0.9); pointer-events: none; z-index: 5;
+        }
+
+        #toast {
+            position: absolute; top: 12%; left: 50%; transform: translate(-50%, -50%) scale(0.9);
+            font-size: clamp(13px, 3vw, 17px); font-weight: 800; color: #00ffd5;
+            background: rgba(8, 20, 35, 0.92); border: 1px solid #00ffd5; padding: 10px 24px;
+            border-radius: 25px; opacity: 0; transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            pointer-events: none; z-index: 20; text-align: center; white-space: nowrap;
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+        #err-box {
+            display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #ff3344; color: #fff; padding: 12px 24px; border-radius: 8px;
+            font-weight: bold; z-index: 9999; text-align: center; max-width: 90%;
+        }
+
+        /* Start Modal */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, rgba(12,24,44,0.94) 0%, rgba(4,10,20,0.98) 100%);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: #fff; z-index: 100; text-align: center; padding: 24px; cursor: pointer;
+        }
+        #overlay h1 {
+            font-size: clamp(34px, 8vw, 60px); font-weight: 900; letter-spacing: 5px;
+            color: #00ffd5; text-shadow: 0 0 25px rgba(0,255,213,0.5); margin-bottom: 8px;
+        }
+        #overlay p {
+            font-size: clamp(13px, 3vw, 16px); color: #d0e4ff; margin-bottom: 22px;
+            max-width: 480px; line-height: 1.5;
+        }
+        .instruction-box {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px;
+            margin-bottom: 26px; font-size: clamp(11px, 2.4vw, 13px); text-align: left;
+            background: rgba(255,255,255,0.06); padding: 14px 20px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.12); width: 100%; max-width: 420px;
+        }
+        .kbd { background: rgba(0,255,213,0.2); color: #00ffd5; padding: 2px 7px; border-radius: 4px; font-weight: bold; }
+
+        .btn-play {
+            background: linear-gradient(135deg, #00ffd5 0%, #0088ff 100%);
+            color: #04101e; font-weight: 900; font-size: clamp(15px, 3.5vw, 18px);
+            padding: 15px 44px; border-radius: 40px; border: none; letter-spacing: 2px;
+            text-transform: uppercase; cursor: pointer; box-shadow: 0 6px 25px rgba(0,255,213,0.4);
+            pointer-events: auto; transition: transform 0.12s ease;
+        }
+        .btn-play:active { transform: scale(0.95); }
+
+        /* Generic Modal Screens */
+        .modal-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(4, 10, 20, 0.85); backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: none; justify-content: center; align-items: center;
+            z-index: 150; padding: 20px;
+        }
+        .modal-box {
+            background: linear-gradient(145deg, rgba(16, 32, 54, 0.95), rgba(8, 16, 28, 0.95));
+            border: 1px solid #00ffd5; box-shadow: 0 0 30px rgba(0,255,213,0.3);
+            border-radius: 20px; padding: 26px 22px; max-width: 400px; width: 100%;
+            text-align: center; color: #fff;
+        }
+        .modal-box h2 { font-size: 22px; margin-bottom: 8px; color: #00ffd5; letter-spacing: 1px; }
+        .modal-box p { font-size: 13px; color: #c4d8f0; margin-bottom: 18px; line-height: 1.4; }
+        
+        .code-input-field {
+            width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.08); color: #00ffd5; font-size: 16px; font-weight: 700;
+            text-align: center; letter-spacing: 2px; outline: none; margin-bottom: 18px;
+            user-select: text; -webkit-user-select: text;
+        }
+        .code-input-field:focus { border-color: #00ffd5; box-shadow: 0 0 12px rgba(0,255,213,0.4); }
+        
+        .modal-btn-row { display: flex; gap: 10px; }
+        .modal-btn {
+            flex: 1; padding: 12px; border-radius: 12px; font-weight: 800; font-size: 14px;
+            letter-spacing: 1px; cursor: pointer; border: none; outline: none;
+        }
+        .btn-confirm { background: #00ffd5; color: #04101e; }
+        .btn-cancel { background: rgba(255,255,255,0.12); color: #fff; }
+        .btn-cancel:hover { background: rgba(255,255,255,0.2); }
+
+        .key-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 12px; background: rgba(255,255,255,0.06); border-radius: 8px;
+            margin-bottom: 8px; font-size: 13px; font-weight: 600;
+        }
+        .key-tag {
+            background: #00ffd5; color: #04101e; padding: 4px 10px; border-radius: 6px; font-weight: 800;
+        }
+
+        /* Touch Layer */
+        #touch-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 50; display: none; pointer-events: none;
+        }
+        #joystick-zone {
+            position: absolute; bottom: 25px; left: 25px; width: 110px; height: 110px;
+            border-radius: 50%; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.3);
+            pointer-events: auto; touch-action: none; display: flex; align-items: center; justify-content: center;
+        }
+        #joystick-knob {
+            width: 44px; height: 44px; border-radius: 50%; background: #00ffd5;
+            box-shadow: 0 0 10px rgba(0,255,213,0.8); pointer-events: none;
+        }
+        .touch-action-group {
+            position: absolute; bottom: 25px; right: 20px;
+            display: flex; gap: 12px; pointer-events: auto;
+        }
+        .t-btn {
+            width: 64px; height: 64px; border-radius: 50%; background: rgba(10,25,45,0.75);
+            border: 2px solid #00ffd5; color: #fff; font-weight: 900; font-size: 13px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+        }
+        .t-btn:active { background: #00ffd5; color: #04101e; }
+    </style>
+</head>
+<body>
+    <div id="err-box"></div>
+    <div id="canvas-container"></div>
+    <div id="reticle"></div>
+
+    <div id="hud">
+        <div class="header-left">
+            <div class="title">Zephyr</div>
+        </div>
+        <div class="hud-group">
+            <button type="button" class="hud-btn" id="btn-controls-menu">⌨️ Keys: <span id="ui-layout-tag">WASD</span></button>
+            <button type="button" class="hud-btn" id="btn-codes">🎁 Codes</button>
+            <button type="button" class="hud-btn" id="btn-camera-toggle">👁️ 3rd Person</button>
+            <div class="stats-badge">
+                Stage: <span id="ui-island">Start Isle</span> | Shards: <span id="ui-shard">0/4</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast">Checkpoint Reached!</div>
+
+    <!-- Codes Modal -->
+    <div id="code-modal" class="modal-screen">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <h2>Secret Codes</h2>
+            <p>Enter a cheat code to skip stages or gain perks.</p>
+            <input type="text" id="code-input" class="code-input-field" placeholder="Enter code here..." autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+            <div class="modal-btn-row">
+                <button type="button" class="modal-btn btn-cancel" id="btn-code-cancel">Cancel</button>
+                <button type="button" class="modal-btn btn-confirm" id="btn-code-submit">Redeem</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls Config Modal -->
+    <div id="controls-modal" class="modal-screen">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <h2>Movement Controls</h2>
+            <p>Choose your preferred layout. Movement is strictly aligned to your camera heading.</p>
+            
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <button type="button" class="modal-btn btn-confirm" id="btn-preset-wasd">QWERTY (WASD)</button>
+                <button type="button" class="modal-btn btn-cancel" id="btn-preset-zqsd">AZERTY (ZQSD)</button>
+            </div>
+
+            <div class="key-row"><span>Forward</span><span class="key-tag" id="bind-fwd">W / Up</span></div>
+            <div class="key-row"><span>Backward</span><span class="key-tag" id="bind-bwd">S / Down</span></div>
+            <div class="key-row"><span>Strafe Left</span><span class="key-tag" id="bind-left">A / Left</span></div>
+            <div class="key-row"><span>Strafe Right</span><span class="key-tag" id="bind-right">D / Right</span></div>
+            <div class="key-row"><span>Jump</span><span class="key-tag">Space</span></div>
+            <div class="key-row"><span>Air Dash</span><span class="key-tag">Shift</span></div>
+
+            <button type="button" class="modal-btn btn-confirm" style="margin-top: 14px; width: 100%;" id="btn-close-controls">Done</button>
+        </div>
+    </div>
+
+    <div id="touch-layer">
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
+        <div class="touch-action-group">
+            <div class="t-btn" id="btn-touch-dash">DASH</div>
+            <div class="t-btn" id="btn-touch-jump">JUMP</div>
+        </div>
+    </div>
+
+    <!-- Entrance Overlay -->
+    <div id="overlay" onclick="handleStartClick(event)">
+        <h1>ZEPHYR</h1>
+        <p>A multi-stage 3D skyway course. Leap across moving islands, uncover all 4 secret Echo Shards, and ascend to the Celestial Spire.</p>
+        
+        <div class="instruction-box" onclick="event.stopPropagation()">
+            <div><span class="kbd">WASD / Keys</span> Move (True-Heading)</div>
+            <div><span class="kbd">Space / Jump</span> Leap</div>
+            <div><span class="kbd">Shift / Dash</span> Air Dash</div>
+            <div><span class="kbd">V / Button</span> 1st/3rd Person</div>
+            <div><span class="kbd">🎁 Codes</span> Skip Cheats</div>
+            <div><span class="kbd">R</span> Instant Reset</div>
+        </div>
+
+        <button type="button" class="btn-play" id="btn-start" onclick="handleStartClick(event)">Click to Enter the Skies</button>
+    </div>
+
+    <!-- Multi-CDN Fallback Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        if (typeof THREE === 'undefined') {
+            document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');
+        }
+    </script>
+    <script>
+        if (typeof THREE === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
+        }
+    </script>
+
+    <script>
+    /* =========================================================================
+       GLOBAL STATE & CONFIG
+       ========================================================================= */
+    let gameActive = false;
+    let audioDriver = null;
+    let isFirstPerson = false;
+    let isAnyModalOpen = false;
+    let collectedCount = 0;
+
+    const keyBinds = {
+        forward: ['KeyW', 'ArrowUp'],
+        backward: ['KeyS', 'ArrowDown'],
+        left: ['KeyA', 'ArrowLeft'],
+        right: ['KeyD', 'ArrowRight'],
+        jump: ['Space'],
+        dash: ['ShiftLeft', 'ShiftRight']
+    };
+
+    function showError(msg) {
+        const box = document.getElementById('err-box');
+        box.style.display = 'block';
+        box.innerText = msg;
+    }
+
+    function handleStartClick(e) {
+        if (e) e.stopPropagation();
+        const ov = document.getElementById('overlay');
+        if (ov) ov.style.display = 'none';
+        
+        gameActive = true;
+        if (audioDriver) audioDriver.unlock();
+
+        if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) {
+            document.getElementById('touch-layer').style.display = 'block';
+        }
+
+        try { document.body.requestPointerLock?.(); } catch (_) {}
+    }
+
+    /* =========================================================================
+       AUDIO SYNTHESIZER
+       ========================================================================= */
+    class AudioDriver {
+        constructor() { this.ctx = null; }
+        unlock() {
+            if (!this.ctx) {
+                const AudioClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioClass) this.ctx = new AudioClass();
+            }
+            if (this.ctx && this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        }
+        play(freqStart, freqEnd, type, duration, gainVal = 0.2) {
+            if (!this.ctx) return;
+            try {
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freqStart, this.ctx.currentTime);
+                if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, this.ctx.currentTime + duration);
+                gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + duration);
+            } catch (_) {}
+        }
+        jump() { this.play(240, 560, 'triangle', 0.16, 0.22); }
+        dash() { this.play(440, 880, 'sine', 0.18, 0.28); }
+        fall() { this.play(220, 50, 'sawtooth', 0.35, 0.18); }
+        click() { this.play(600, 400, 'triangle', 0.08, 0.15); }
+        checkpoint() {
+            [523, 659, 784, 1046].forEach((f, i) => {
+                setTimeout(() => this.play(f, null, 'sine', 0.25, 0.14), i * 75);
+            });
+        }
+        shard() {
+            [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+                setTimeout(() => this.play(f, null, 'triangle', 0.35, 0.18), i * 70);
+            });
+        }
+        grandFanfare() {
+            [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98].forEach((f, i) => {
+                setTimeout(() => this.play(f, null, 'sine', 0.5, 0.22), i * 85);
+            });
+        }
+        warp() {
+            [261, 329, 392, 523, 659, 784, 1046].forEach((f, i) => {
+                setTimeout(() => this.play(f, f * 1.5, 'sine', 0.25, 0.2), i * 60);
+            });
+        }
+    }
+    audioDriver = new AudioDriver();
+
+    /* =========================================================================
+       THREE.JS ENGINE INITIALIZATION
+       ========================================================================= */
+    if (typeof THREE === 'undefined') {
+        showError("Three.js failed to load. Check your internet connection.");
+        throw new Error("Three.js missing");
+    }
+
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x6eb2e4);
+    scene.fog = new THREE.FogExp2(0x6eb2e4, 0.007);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    
+    let renderer;
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+    } catch (e) {
+        showError("WebGL is unsupported or disabled in this browser.");
+        throw e;
+    }
+
+    const ambientLight = new THREE.HemisphereLight(0xffffff, 0x334466, 0.75);
+    scene.add(ambientLight);
+
+    // Dynamic Follow-Sun for crisp shadows across the entire world
+    const sun = new THREE.DirectionalLight(0xfff5e6, 0.9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 1024;
+    sun.shadow.mapSize.height = 1024;
+    const shadowSpan = 70;
+    sun.shadow.camera.left = -shadowSpan; sun.shadow.camera.right = shadowSpan;
+    sun.shadow.camera.top = shadowSpan; sun.shadow.camera.bottom = -shadowSpan;
+    sun.shadow.camera.near = 10; sun.shadow.camera.far = 250;
+    scene.add(sun);
+    scene.add(sun.target);
+
+    // Atmospheric cloud archipelago
+    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
+    for (let i = 0; i < 65; i++) {
+        const cloud = new THREE.Mesh(new THREE.DodecahedronGeometry(14, 1), cloudMat);
+        cloud.position.set((Math.random() - 0.5) * 500, -25 - Math.random() * 50, -Math.random() * 400);
+        const s = 1 + Math.random() * 2.5;
+        cloud.scale.set(s * 1.8, s * 0.8, s * 1.2);
+        scene.add(cloud);
+    }
+
+    /* =========================================================================
+       WORLD ARCHITECTURE (5 EXPANDED STAGES & MULTI-SHARD SYSTEM)
+       ========================================================================= */
+    const colliders = [];
+    const movingPlatforms = [];
+    const checkpoints = [];
+    const updraftRings = [];
+    const shards = [];
+
+    const materials = {
+        grass: new THREE.MeshLambertMaterial({ color: 0x48b654 }),
+        rock: new THREE.MeshLambertMaterial({ color: 0x6e6357 }),
+        platform: new THREE.MeshLambertMaterial({ color: 0xe89e3a }),
+        gold: new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 }),
+        checkpointOff: new THREE.MeshStandardMaterial({ color: 0x485868, emissive: 0x111e28 }),
+        checkpointOn: new THREE.MeshStandardMaterial({ color: 0x00ffd5, emissive: 0x00bfa5 }),
+        shardMat: new THREE.MeshStandardMaterial({ color: 0xff00bb, emissive: 0x990066, roughness: 0.1 }),
+        shadowDecal: new THREE.MeshBasicMaterial({ color: 0x041020, transparent: true, opacity: 0.45 })
+    };
+
+    function buildIsland(x, y, z, w, l, depth = 8) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 1.5, l), materials.grass);
+        slab.position.y = -0.75;
+        slab.receiveShadow = true;
+        group.add(slab);
+
+        const bottom = new THREE.Mesh(new THREE.ConeGeometry(Math.min(w, l) * 0.7, depth, 5), materials.rock);
+        bottom.position.y = -depth / 2 - 1.5;
+        bottom.rotation.x = Math.PI;
+        bottom.receiveShadow = true;
+        group.add(bottom);
+
+        scene.add(group);
+        colliders.push(new THREE.Box3(
+            new THREE.Vector3(x - w / 2, y - 1.5, z - l / 2),
+            new THREE.Vector3(x + w / 2, y, z + l / 2)
+        ));
+    }
+
+    function buildMovingPlatform(start, end, speed, size = { x: 5, y: 1, z: 5 }) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), materials.platform);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.position.copy(start);
+        scene.add(mesh);
+
+        const pData = {
+            mesh, start: start.clone(), end: end.clone(), speed,
+            progress: Math.random() * Math.PI, size,
+            delta: new THREE.Vector3(),
+            collider: new THREE.Box3()
+        };
+        movingPlatforms.push(pData);
+        return pData;
+    }
+
+    function buildCheckpoint(x, y, z, name) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+
+        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 4, 6), materials.checkpointOff);
+        pillar.position.y = 2.0;
+        group.add(pillar);
+
+        const halo = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.15, 8, 20), materials.checkpointOff);
+        halo.position.y = 3.3;
+        halo.rotation.x = Math.PI / 2;
+        group.add(halo);
+
+        scene.add(group);
+        const cp = {
+            name, position: new THREE.Vector3(x, y + 1.2, z),
+            halo, pillar, active: false
+        };
+        checkpoints.push(cp);
+        return cp;
+    }
+
+    function buildUpdraft(x, y, z, boost = 22) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(2, 0.25, 6, 16), materials.gold);
+        ring.position.set(x, y, z);
+        ring.rotation.x = Math.PI / 2;
+        scene.add(ring);
+        updraftRings.push({ mesh: ring, pos: new THREE.Vector3(x, y, z), boost });
+    }
+
+    function buildShard(id, name, x, y, z) {
+        const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), materials.shardMat);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+        shards.push({ id, name, mesh, pos: new THREE.Vector3(x, y, z), collected: false });
+    }
+
+    // --- STAGE 1: AETHER SANCTUARY ---
+    buildIsland(0, 0, 0, 16, 16);
+    buildCheckpoint(0, 0, 0, "Stage 1: Start Isle");
+
+    buildIsland(0, 1, -16, 4.5, 4.5);
+    buildIsland(-5, 2, -26, 4.5, 4.5);
+    buildIsland(3, 3, -36, 4.5, 4.5);
+    buildMovingPlatform(new THREE.Vector3(0, 4, -48), new THREE.Vector3(0, 4, -68), 1.3);
+
+    // --- STAGE 2: WHISPERING ISLE ---
+    buildIsland(0, 5, -84, 18, 18);
+    buildCheckpoint(0, 5, -84, "Stage 2: Whispering Isle");
+
+    // Secret 1: Whispering Depths
+    buildIsland(14, 0, -84, 4, 4, 3);
+    buildIsland(22, -3, -92, 3.5, 3.5, 3);
+    buildIsland(22, -4, -104, 5, 5, 3);
+    buildShard(1, "Whisper Shard", 22, -1.8, -104);
+    buildUpdraft(13, 2, -99, 22);
+
+    // --- STAGE 3: CLOCKWORK STRAITS ---
+    buildMovingPlatform(new THREE.Vector3(-11, 7, -104), new THREE.Vector3(11, 7, -104), 2.0);
+    buildMovingPlatform(new THREE.Vector3(0, 9, -120), new THREE.Vector3(0, 15, -120), 1.5);
+
+    buildIsland(0, 16, -142, 18, 18);
+    buildCheckpoint(0, 16, -142, "Stage 3: Chronos Haven");
+
+    // Secret 2: Gear-works Grotto (Tucked behind Chronos Haven)
+    buildIsland(0, 11, -156, 4, 4, 3);
+    buildMovingPlatform(new THREE.Vector3(-6, 11, -164), new THREE.Vector3(-12, 11, -164), 1.2, { x: 3.5, y: 1, z: 3.5 });
+    buildIsland(-18, 11, -164, 4.5, 4.5, 3);
+    buildShard(2, "Chronos Shard", -18, 13.2, -164);
+    buildUpdraft(-18, 12, -150, 24);
+
+    // --- STAGE 4: TEMPEST CAUSEWAY ---
+    buildIsland(10, 18, -172, 4.5, 4.5);
+    buildIsland(16, 20, -186, 4.5, 4.5);
+    buildIsland(8, 22, -200, 4.5, 4.5);
+    
+    // Fast high-altitude skiff
+    buildMovingPlatform(new THREE.Vector3(8, 23, -214), new THREE.Vector3(-8, 25, -226), 2.4, { x: 5, y: 1, z: 5 });
+    
+    // Updraft launcher to high aerial pinnacle
+    buildUpdraft(0, 26, -236, 28);
+    buildIsland(-18, 36, -236, 4, 4, 6);
+    buildShard(3, "Tempest Shard", -18, 38.5, -236);
+
+    buildIsland(0, 28, -256, 20, 20);
+    buildCheckpoint(0, 28, -256, "Stage 4: Aero Citadel");
+
+    // --- STAGE 5: CELESTIAL STRATOSPHERE (GRAND SUMMIT) ---
+    buildMovingPlatform(new THREE.Vector3(-12, 31, -276), new THREE.Vector3(12, 31, -276), 2.2);
+    buildMovingPlatform(new THREE.Vector3(8, 35, -294), new THREE.Vector3(-8, 37, -294), 2.0);
+    buildMovingPlatform(new THREE.Vector3(0, 39, -310), new THREE.Vector3(0, 45, -310), 1.6);
+
+    // Grand Summit Monolith Island
+    buildIsland(0, 46, -332, 22, 22, 14);
+    const finalCheckpoint = buildCheckpoint(0, 46, -332, "Stage 5: Celestial Spire (Goal)");
+
+    const monolith = new THREE.Mesh(new THREE.CylinderGeometry(2, 3.5, 12, 8), materials.gold);
+    monolith.position.set(0, 52, -332);
+    scene.add(monolith);
+
+    // Secret 4: Blind-Leap Alcove beneath Celestial Summit
+    buildIsland(0, 39, -348, 5, 5, 3);
+    buildShard(4, "Celestial Shard", 0, 41.5, -348);
+    buildUpdraft(0, 41, -342, 25);
+
+    /* =========================================================================
+       PLAYER SYSTEM
+       ========================================================================= */
+    const playerGroup = new THREE.Group();
+    const playerVisuals = new THREE.Group();
+
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 1.3, 12), new THREE.MeshStandardMaterial({ color: 0x1a66e0 }));
+    torso.position.y = 0.85; torso.castShadow = true;
+    playerVisuals.add(torso);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 12), new THREE.MeshStandardMaterial({ color: 0x124296 }));
+    head.position.y = 1.65; head.castShadow = true;
+    playerVisuals.add(head);
+
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.3), new THREE.MeshBasicMaterial({ color: 0x00ffd5 }));
+    visor.position.set(0, 1.65, -0.28);
+    playerVisuals.add(visor);
+
+    playerGroup.add(playerVisuals);
+    scene.add(playerGroup);
+
+    const dropShadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 16), materials.shadowDecal);
+    dropShadow.rotation.x = -Math.PI / 2;
+    scene.add(dropShadow);
+
+    const player = {
+        pos: new THREE.Vector3(0, 3, 0),
+        vel: new THREE.Vector3(),
+        speed: 14, jumpForce: 15, gravity: 34,
+        isGrounded: false, coyoteTimer: 0,
+        canAirDash: true, isDashing: false, dashTimer: 0,
+        activePlatform: null
+    };
+    playerGroup.position.copy(player.pos);
+
+    let activeCheckpoint = checkpoints[0];
+    activeCheckpoint.active = true;
+    activeCheckpoint.halo.material = materials.checkpointOn;
+    activeCheckpoint.pillar.material = materials.checkpointOn;
+
+    /* =========================================================================
+       SECRET CODES
+       ========================================================================= */
+    const codeModal = document.getElementById('code-modal');
+    const codeInput = document.getElementById('code-input');
+    const btnCodes = document.getElementById('btn-codes');
+    const btnCodeCancel = document.getElementById('btn-code-cancel');
+    const btnCodeSubmit = document.getElementById('btn-code-submit');
+
+    function openCodeModal(e) {
+        if (e) e.stopPropagation();
+        isAnyModalOpen = true;
+        codeModal.style.display = 'flex';
+        codeInput.value = '';
+        try { document.exitPointerLock?.(); } catch (_) {}
+        setTimeout(() => codeInput.focus(), 50);
+    }
+
+    function closeCodeModal(e) {
+        if (e) e.stopPropagation();
+        isAnyModalOpen = false;
+        codeModal.style.display = 'none';
+        try { document.body.requestPointerLock?.(); } catch (_) {}
+    }
+
+    function applySecretCode() {
+        const code = codeInput.value.trim().toUpperCase();
+
+        if (code === "SECRET_CODE") {
+            // Teleport directly to Stage 5 Celestial Spire
+            player.pos.set(0, 48, -332);
+            player.vel.set(0, 0, 0);
+            player.activePlatform = null;
+            playerGroup.position.copy(player.pos);
+
+            checkpoints.forEach(c => {
+                c.active = false;
+                c.halo.material = materials.checkpointOff;
+                c.pillar.material = materials.checkpointOff;
+            });
+            finalCheckpoint.active = true;
+            finalCheckpoint.halo.material = materials.checkpointOn;
+            finalCheckpoint.pillar.material = materials.checkpointOn;
+            activeCheckpoint = finalCheckpoint;
+            document.getElementById('ui-island').innerText = finalCheckpoint.name;
+
+            audioDriver.warp();
+            notify("⚡ CODE REDEEMED: Warped to Celestial Spire! ⚡");
+            closeCodeModal();
+        } else {
+            notify("❌ Invalid Code! Try: SECRET_CODE");
+            codeInput.style.borderColor = '#ff3355';
+            setTimeout(() => codeInput.style.borderColor = 'rgba(255,255,255,0.25)', 800);
+        }
+    }
+
+    btnCodes.addEventListener('click', openCodeModal);
+    btnCodes.addEventListener('pointerdown', (e) => e.stopPropagation());
+    btnCodeCancel.addEventListener('click', closeCodeModal);
+    btnCodeSubmit.addEventListener('click', applySecretCode);
+    codeModal.addEventListener('click', closeCodeModal);
+
+    codeInput.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') applySecretCode();
+        if (e.key === 'Escape') closeCodeModal();
+    });
+
+    /* =========================================================================
+       CUSTOM CONTROLS (WASD / ZQSD)
+       ========================================================================= */
+    const controlsModal = document.getElementById('controls-modal');
+    const btnControlsMenu = document.getElementById('btn-controls-menu');
+    const btnCloseControls = document.getElementById('btn-close-controls');
+    const btnPresetWASD = document.getElementById('btn-preset-wasd');
+    const btnPresetZQSD = document.getElementById('btn-preset-zqsd');
+    const uiLayoutTag = document.getElementById('ui-layout-tag');
+
+    function openControlsModal(e) {
+        if (e) e.stopPropagation();
+        isAnyModalOpen = true;
+        controlsModal.style.display = 'flex';
+        try { document.exitPointerLock?.(); } catch (_) {}
+    }
+
+    function closeControlsModal(e) {
+        if (e) e.stopPropagation();
+        isAnyModalOpen = false;
+        controlsModal.style.display = 'none';
+        try { document.body.requestPointerLock?.(); } catch (_) {}
+    }
+
+    function setWASDLayout() {
+        keyBinds.forward = ['KeyW', 'ArrowUp'];
+        keyBinds.backward = ['KeyS', 'ArrowDown'];
+        keyBinds.left = ['KeyA', 'ArrowLeft'];
+        keyBinds.right = ['KeyD', 'ArrowRight'];
+        document.getElementById('bind-fwd').innerText = "W / Up";
+        document.getElementById('bind-left').innerText = "A / Left";
+        uiLayoutTag.innerText = "WASD";
+        btnPresetWASD.className = "modal-btn btn-confirm";
+        btnPresetZQSD.className = "modal-btn btn-cancel";
+        notify("Controls: QWERTY (WASD)");
+    }
+
+    function setZQSDLayout() {
+        keyBinds.forward = ['KeyZ', 'ArrowUp'];
+        keyBinds.backward = ['KeyS', 'ArrowDown'];
+        keyBinds.left = ['KeyQ', 'ArrowLeft'];
+        keyBinds.right = ['KeyD', 'ArrowRight'];
+        document.getElementById('bind-fwd').innerText = "Z / Up";
+        document.getElementById('bind-left').innerText = "Q / Left";
+        uiLayoutTag.innerText = "ZQSD";
+        btnPresetZQSD.className = "modal-btn btn-confirm";
+        btnPresetWASD.className = "modal-btn btn-cancel";
+        notify("Controls: AZERTY (ZQSD)");
+    }
+
+    btnControlsMenu.addEventListener('click', openControlsModal);
+    btnControlsMenu.addEventListener('pointerdown', (e) => e.stopPropagation());
+    btnCloseControls.addEventListener('click', closeControlsModal);
+    btnPresetWASD.addEventListener('click', setWASDLayout);
+    btnPresetZQSD.addEventListener('click', setZQSDLayout);
+    controlsModal.addEventListener('click', closeControlsModal);
+
+    /* =========================================================================
+       CAMERA VIEW TOGGLE (1ST / 3RD PERSON)
+       ========================================================================= */
+    function toggleCameraView(e) {
+        if (e) e.stopPropagation();
+        isFirstPerson = !isFirstPerson;
+        audioDriver.click();
+
+        const btn = document.getElementById('btn-camera-toggle');
+        if (btn) btn.innerText = isFirstPerson ? '👁️ 1st Person' : '👁️ 3rd Person';
+        playerVisuals.visible = !isFirstPerson;
+
+        notify(isFirstPerson ? "Mode: First Person View" : "Mode: Third Person View");
+    }
+
+    const toggleBtn = document.getElementById('btn-camera-toggle');
+    toggleBtn.addEventListener('click', toggleCameraView);
+    toggleBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+    /* =========================================================================
+       UNIVERSAL INPUT & POINTER-LOCK ENGINE
+       ========================================================================= */
+    const keys = {};
+    const virtualAxis = { x: 0, y: 0 };
+    let mouseYaw = 0;
+    let mousePitch = 0.25;
+    let isDragging = false;
+    let lastMouseX = 0, lastMouseY = 0;
+
+    window.addEventListener('keydown', (e) => {
+        if (isAnyModalOpen) return;
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+            e.preventDefault();
+        }
+        keys[e.code] = true;
+        if (e.code === 'KeyR') respawn();
+        if (e.code === 'KeyV' || e.code === 'KeyC') toggleCameraView();
+        if (keyBinds.dash.includes(e.code)) triggerDash();
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (isAnyModalOpen) return;
+        keys[e.code] = false;
+    });
+
+    window.addEventListener('blur', () => {
+        for (let k in keys) keys[k] = false;
+    });
+
+    window.addEventListener('mousedown', (e) => {
+        if (!gameActive || isAnyModalOpen || e.target.closest('#touch-layer') || e.target.closest('#overlay') || e.target.closest('.hud-btn')) return;
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        if (document.pointerLockElement !== document.body) {
+            try { document.body.requestPointerLock?.(); } catch (_) {}
+        }
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!gameActive || isAnyModalOpen) return;
+        if (document.pointerLockElement === document.body) {
+            mouseYaw -= e.movementX * 0.0024;
+            mousePitch += e.movementY * 0.0024;
+        } else if (isDragging) {
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            mouseYaw -= dx * 0.004;
+            mousePitch += dy * 0.004;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        }
+        
+        const minP = isFirstPerson ? -1.35 : -0.35;
+        const maxP = isFirstPerson ? 1.35 : 1.2;
+        mousePitch = Math.max(minP, Math.min(maxP, mousePitch));
+    });
+
+    // Touch Virtual Joystick
+    const stickZone = document.getElementById('joystick-zone');
+    const stickKnob = document.getElementById('joystick-knob');
+    let stickTouchId = null;
+    const touchLookState = {};
+
+    stickZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        stickTouchId = e.changedTouches[0].identifier;
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+        if (isAnyModalOpen) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const t = e.changedTouches[i];
+            if (t.identifier === stickTouchId) {
+                const rect = stickZone.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                let dx = t.clientX - centerX;
+                let dy = t.clientY - centerY;
+                const dist = Math.hypot(dx, dy);
+                const maxR = rect.width / 2;
+                if (dist > maxR) {
+                    dx = (dx / dist) * maxR;
+                    dy = (dy / dist) * maxR;
+                }
+                stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+                virtualAxis.x = dx / maxR;
+                virtualAxis.y = dy / maxR;
+            } else if (t.clientX > window.innerWidth / 2) {
+                if (touchLookState[t.identifier]) {
+                    const prev = touchLookState[t.identifier];
+                    mouseYaw -= (t.clientX - prev.x) * 0.006;
+                    mousePitch += (t.clientY - prev.y) * 0.006;
+                    const minP = isFirstPerson ? -1.35 : -0.35;
+                    const maxP = isFirstPerson ? 1.35 : 1.2;
+                    mousePitch = Math.max(minP, Math.min(maxP, mousePitch));
+                }
+                touchLookState[t.identifier] = { x: t.clientX, y: t.clientY };
+            }
+        }
+    }, { passive: false });
+
+    const handleTouchEnd = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const t = e.changedTouches[i];
+            if (t.identifier === stickTouchId) {
+                stickTouchId = null;
+                stickKnob.style.transform = `translate(0, 0)`;
+                virtualAxis.x = 0; virtualAxis.y = 0;
+            }
+            delete touchLookState[t.identifier];
+        }
+    };
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchEnd);
+
+    const btnJump = document.getElementById('btn-touch-jump');
+    const btnDash = document.getElementById('btn-touch-dash');
+
+    btnJump.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        keys['Space'] = true;
+        setTimeout(() => keys['Space'] = false, 120);
+    });
+
+    btnDash.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        triggerDash();
+    });
+
+    function triggerDash() {
+        if (isAnyModalOpen) return;
+        if (player.canAirDash && !player.isGrounded && !player.isDashing) {
+            player.canAirDash = false;
+            player.isDashing = true;
+            player.dashTimer = 0.18;
+            audioDriver.dash();
+            const forward = new THREE.Vector3(-Math.sin(mouseYaw), 0, -Math.cos(mouseYaw)).normalize();
+            player.vel.copy(forward.multiplyScalar(28));
+            player.vel.y = 2.5;
+        }
+    }
+
+    function notify(text) {
+        const toast = document.getElementById('toast');
+        toast.innerText = text;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2400);
+    }
+
+    function respawn() {
+        audioDriver.fall();
+        player.pos.copy(activeCheckpoint.position);
+        player.vel.set(0, 0, 0);
+        player.activePlatform = null;
+        playerGroup.position.copy(player.pos);
+    }
+
+    /* =========================================================================
+       PHYSICS & RENDER LOOP
+       ========================================================================= */
+    let lastFrame = performance.now();
+
+    function update(dt) {
+        dt = Math.min(dt, 0.05);
+
+        // Dynamic Sun Placement follows player across stages
+        sun.position.set(player.pos.x + 50, player.pos.y + 80, player.pos.z + 40);
+        sun.target.position.set(player.pos.x, player.pos.y, player.pos.z);
+
+        // Update Moving Platforms
+        movingPlatforms.forEach(p => {
+            p.progress += dt * p.speed;
+            const t = (Math.sin(p.progress) + 1) / 2;
+            const prev = p.mesh.position.clone();
+            p.mesh.position.lerpVectors(p.start, p.end, t);
+            p.delta.subVectors(p.mesh.position, prev);
+            
+            const halfX = p.size.x / 2;
+            const halfY = p.size.y / 2;
+            const halfZ = p.size.z / 2;
+            p.collider.min.set(p.mesh.position.x - halfX, p.mesh.position.y - halfY, p.mesh.position.z - halfZ);
+            p.collider.max.set(p.mesh.position.x + halfX, p.mesh.position.y + halfY, p.mesh.position.z + halfZ);
+        });
+
+        // Compute Camera-Aligned Intent Vector
+        let forwardInput = 0;
+        let strafeInput = 0;
+
+        if (!isAnyModalOpen) {
+            if (keyBinds.forward.some(k => keys[k])) forwardInput += 1;
+            if (keyBinds.backward.some(k => keys[k])) forwardInput -= 1;
+            if (keyBinds.right.some(k => keys[k])) strafeInput += 1;
+            if (keyBinds.left.some(k => keys[k])) strafeInput -= 1;
+
+            if (Math.hypot(virtualAxis.x, virtualAxis.y) > 0.1) {
+                strafeInput += virtualAxis.x;
+                forwardInput -= virtualAxis.y;
+            }
+        }
+
+        const inputLen = Math.hypot(forwardInput, strafeInput);
+        if (inputLen > 1) {
+            forwardInput /= inputLen;
+            strafeInput /= inputLen;
+        }
+
+        const moveVec = new THREE.Vector3();
+        if (inputLen > 0.05) {
+            moveVec.x = forwardInput * (-Math.sin(mouseYaw)) + strafeInput * Math.cos(mouseYaw);
+            moveVec.z = forwardInput * (-Math.cos(mouseYaw)) + strafeInput * (-Math.sin(mouseYaw));
+        }
+
+        // Acceleration & Air Drag
+        if (player.isDashing) {
+            player.dashTimer -= dt;
+            if (player.dashTimer <= 0) player.isDashing = false;
+        } else {
+            const tx = moveVec.x * player.speed;
+            const tz = moveVec.z * player.speed;
+            const lerp = player.isGrounded ? 18 : 6;
+            player.vel.x += (tx - player.vel.x) * lerp * dt;
+            player.vel.z += (tz - player.vel.z) * lerp * dt;
+            player.vel.y -= player.gravity * dt;
+        }
+
+        // Coyote Time & Jump
+        if (player.isGrounded) {
+            player.coyoteTimer = 0.12;
+            player.canAirDash = true;
+        } else {
+            player.coyoteTimer -= dt;
+        }
+
+        if (keyBinds.jump.some(k => keys[k]) && !isAnyModalOpen) {
+            if (player.coyoteTimer > 0) {
+                audioDriver.jump();
+                player.vel.y = player.jumpForce;
+                player.coyoteTimer = 0;
+                player.isGrounded = false;
+                if (player.activePlatform) {
+                    player.vel.add(player.activePlatform.delta.clone().divideScalar(dt));
+                    player.activePlatform = null;
+                }
+            }
+        }
+
+        if (player.activePlatform) player.pos.add(player.activePlatform.delta);
+
+        const prevY = player.pos.y;
+        player.pos.x += player.vel.x * dt;
+        player.pos.y += player.vel.y * dt;
+        player.pos.z += player.vel.z * dt;
+
+        // Ground Collision Handling
+        let groundY = -Infinity;
+        player.activePlatform = null;
+
+        colliders.forEach(b => {
+            if (player.pos.x >= b.min.x && player.pos.x <= b.max.x && player.pos.z >= b.min.z && player.pos.z <= b.max.z) {
+                if (prevY >= b.max.y - 0.25 && player.pos.y <= b.max.y + 0.45) {
+                    if (b.max.y > groundY) groundY = b.max.y;
+                }
+            }
+        });
+
+        movingPlatforms.forEach(p => {
+            const b = p.collider;
+            if (player.pos.x >= b.min.x - 0.3 && player.pos.x <= b.max.x + 0.3 && player.pos.z >= b.min.z - 0.3 && player.pos.z <= b.max.z + 0.3) {
+                if (prevY >= b.max.y - 0.25 && player.pos.y <= b.max.y + 0.45) {
+                    if (b.max.y > groundY) {
+                        groundY = b.max.y;
+                        player.activePlatform = p;
+                    }
+                }
+            }
+        });
+
+        if (groundY !== -Infinity && player.vel.y <= 0) {
+            player.pos.y = groundY;
+            player.vel.y = 0;
+            player.isGrounded = true;
+        } else {
+            player.isGrounded = false;
+        }
+
+        // Project Drop Shadow
+        let shadowY = -Infinity;
+        colliders.forEach(b => {
+            if (player.pos.x >= b.min.x && player.pos.x <= b.max.x && player.pos.z >= b.min.z && player.pos.z <= b.max.z) {
+                if (b.max.y <= player.pos.y + 0.5 && b.max.y > shadowY) shadowY = b.max.y;
+            }
+        });
+        movingPlatforms.forEach(p => {
+            const b = p.collider;
+            if (player.pos.x >= b.min.x && player.pos.x <= b.max.x && player.pos.z >= b.min.z && player.pos.z <= b.max.z) {
+                if (b.max.y <= player.pos.y + 0.5 && b.max.y > shadowY) shadowY = b.max.y;
+            }
+        });
+
+        if (shadowY !== -Infinity && (player.pos.y - shadowY) < 25) {
+            dropShadow.visible = true;
+            dropShadow.position.set(player.pos.x, shadowY + 0.02, player.pos.z);
+            const dist = player.pos.y - shadowY;
+            const s = Math.max(0.3, 1.0 - dist * 0.035);
+            dropShadow.scale.set(s, s, 1);
+        } else {
+            dropShadow.visible = false;
+        }
+
+        // Smooth Character Orientation
+        if (moveVec.lengthSq() > 0.01) {
+            playerGroup.rotation.y = Math.atan2(moveVec.x, moveVec.z) + Math.PI;
+        }
+        playerGroup.position.copy(player.pos);
+
+        // Checkpoints Detection
+        checkpoints.forEach(cp => {
+            if (player.pos.distanceTo(cp.position) < 4.5 && !cp.active) {
+                checkpoints.forEach(c => {
+                    c.active = false;
+                    c.halo.material = materials.checkpointOff;
+                    c.pillar.material = materials.checkpointOff;
+                });
+                cp.active = true;
+                cp.halo.material = materials.checkpointOn;
+                cp.pillar.material = materials.checkpointOn;
+                activeCheckpoint = cp;
+                audioDriver.checkpoint();
+                document.getElementById('ui-island').innerText = cp.name;
+                notify(`Reached: ${cp.name}`);
+            }
+        });
+
+        // Shards Animation & Multi-Collectible System
+        shards.forEach(sh => {
+            if (!sh.collected) {
+                sh.mesh.rotation.y += dt * 2.5;
+                sh.mesh.rotation.x += dt * 1.2;
+                if (player.pos.distanceTo(sh.pos) < 3.2) {
+                    sh.collected = true;
+                    scene.remove(sh.mesh);
+                    collectedCount++;
+                    document.getElementById('ui-shard').innerText = `${collectedCount}/4`;
+
+                    if (collectedCount === 4) {
+                        audioDriver.grandFanfare();
+                        notify("🏆 ALL 4 ECHO SHARDS UNLOCKED! Skyward Master! 🏆");
+                    } else {
+                        audioDriver.shard();
+                        notify(`★ [${collectedCount}/4] ${sh.name} Unlocked! ★`);
+                    }
+                }
+            }
+        });
+
+        // Updraft Geysers Detection
+        updraftRings.forEach(up => {
+            up.mesh.rotation.z += dt * 1.5;
+            if (player.pos.distanceTo(up.pos) < 3.4) {
+                player.vel.y = up.boost;
+                player.canAirDash = true;
+                audioDriver.jump();
+            }
+        });
+
+        // Abyss Fall Boundary (Extends down with the higher stages)
+        if (player.pos.y < -35) respawn();
+
+        // Camera Positioning
+        if (isFirstPerson) {
+            const eyeY = player.pos.y + 1.6;
+            camera.position.set(player.pos.x, eyeY, player.pos.z);
+
+            const lookTarget = new THREE.Vector3(
+                player.pos.x - Math.sin(mouseYaw) * Math.cos(mousePitch) * 20,
+                eyeY - Math.sin(mousePitch) * 20,
+                player.pos.z - Math.cos(mouseYaw) * Math.cos(mousePitch) * 20
+            );
+            camera.lookAt(lookTarget);
+        } else {
+            const camDist = 7.5;
+            const cx = player.pos.x + camDist * Math.sin(mouseYaw) * Math.cos(mousePitch);
+            const cy = player.pos.y + 2.0 + camDist * Math.sin(mousePitch);
+            const cz = player.pos.z + camDist * Math.cos(mouseYaw) * Math.cos(mousePitch);
+            camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.25);
+            camera.lookAt(player.pos.x, player.pos.y + 1.4, player.pos.z);
+        }
+    }
+
+    function renderLoop() {
+        requestAnimationFrame(renderLoop);
+        const now = performance.now();
+        const dt = (now - lastFrame) / 1000;
+        lastFrame = now;
+
+        update(dt);
+        renderer.render(scene, camera);
+    }
+    renderLoop();
+
+    // Responsive Viewport Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    </script>
+</body>
+</html>

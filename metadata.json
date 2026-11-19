@@ -1,0 +1,8 @@
+{
+  "name": "Zephyr: Isles of Velocity",
+  "description": "A 3D skyway platformer featuring swept moving-platform physics, wind gliding, explosive air dashing, procedural sky music and wind audio, and multi-stage island exploration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
